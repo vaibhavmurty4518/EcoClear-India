@@ -1,0 +1,524 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>EcoClear India — Industrial Environmental Site Pre-Screening & Impact Intelligence</title>
+  
+  <!-- Fonts & Leaflet Styles -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+  <!-- Top Navigation Header -->
+  <header class="topbar">
+    <div class="topbar-inner">
+      <div class="brand">
+        <span class="brand-logo">🌿</span>
+        <div>
+          <strong>EcoClear India</strong>
+          <small>Environmental Site Screening & Impact Intelligence</small>
+        </div>
+      </div>
+      <nav class="nav-links">
+        <a href="#analysis" class="nav-link">Site Analysis</a>
+        <a href="#impacts" class="nav-link">Impact Library</a>
+        <a href="#regulatory" class="nav-link">Regulatory Checks</a>
+        <a href="#alternatives" class="nav-link">Alternative Sites</a>
+        <a href="#compare" class="nav-link">Compare Industries</a>
+        <a href="#" id="navDataSources" class="nav-link">Data Sources</a>
+        <a href="#" id="navMethodology" class="nav-link">Methodology</a>
+        <a href="#" id="navAcademicDocs" class="nav-link nav-highlight">Academic Docs</a>
+      </nav>
+      <div class="topbar-actions">
+        <button id="btnOpenAI" class="btn-ai-nav">✨ Ask AI Advisor</button>
+        <button id="btnOpenReport" class="btn-report-nav">📄 Generate Report</button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Hero Section -->
+  <section class="hero">
+    <div class="hero-container">
+      <div class="hero-badge">
+        <span>🇮🇳 INDIA INDUSTRIAL SITING INTELLIGENCE • STAGE 3 PROTOTYPE</span>
+      </div>
+      <h1>Before you build, <em>understand the site.</em></h1>
+      <p>
+        A science-grounded environmental decision-support platform answering: 
+        <strong>"If I establish an industrial project at a specific location in India, what environmental risks, sensitive features, potential impacts, and regulatory considerations should I investigate before proceeding?"</strong>
+      </p>
+
+      <div class="notice-box">
+        <div class="notice-icon">⚖️</div>
+        <div>
+          <strong>PRELIMINARY NON-STATUTORY SCREENING SYSTEM:</strong>
+          This system provides early decision intelligence. It does <u>not</u> grant statutory Environmental Clearance (EC), Consent to Establish (CTE), or replace competent authorities (MoEFCC, SEIAA, SPCB, CPCB, NBWL, AERB) under the Environment (Protection) Act 1986 or Atomic Energy Act 1962.
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Main Workspace: Split-screen Controls + GIS Map -->
+  <main class="main-content">
+    <section id="analysis" class="workspace-grid">
+      
+      <!-- Left Column: Input Form Controls -->
+      <aside class="panel controls-panel">
+        
+        <!-- Step 1: Project Information -->
+        <div class="form-step-block">
+          <div class="step-title">
+            <span class="step-num">01</span>
+            <h2>Project Specification</h2>
+          </div>
+
+          <label class="form-label">
+            Project Title / Proposal Name
+            <input id="projectNameInput" type="text" class="form-input" value="Kalinganagar Integrated Steel Complex" placeholder="e.g. Dahej Organic Chemicals Unit II">
+          </label>
+
+          <label class="form-label">
+            Industry / Sector Profile (16 Sectors)
+            <select id="industrySelect" class="form-select">
+              <!-- Dynamically populated from industry-profiles.js -->
+            </select>
+          </label>
+
+          <label class="form-label">
+            Sub-Sector
+            <select id="subsectorSelect" class="form-select">
+              <!-- Dynamically populated based on selected industry -->
+            </select>
+          </label>
+
+          <div class="form-row-2col">
+            <label class="form-label">
+              Production Capacity
+              <input id="capacityInput" type="number" class="form-input" value="500000" min="1">
+            </label>
+            <label class="form-label">
+              Capacity Unit
+              <select id="unitSelect" class="form-select">
+                <!-- Dynamically populated based on industry -->
+              </select>
+            </label>
+          </div>
+
+          <label class="form-label">
+            Project Phase
+            <select id="projectPhaseSelect" class="form-select">
+              <option value="New Greenfield Project">New Greenfield Project</option>
+              <option value="Brownfield Expansion">Brownfield Expansion (Existing Unit)</option>
+              <option value="Modernization / Process Upgradation">Modernization / Process Upgradation</option>
+            </select>
+          </label>
+
+          <div id="industrySpecificNotice" class="industry-alert-box">
+            <!-- Populated dynamically with sector-specific siting notes -->
+          </div>
+        </div>
+
+        <!-- Step 2: Location & Spatial Specification -->
+        <div class="form-step-block">
+          <div class="step-title">
+            <span class="step-num">02</span>
+            <h2>Site Location & GIS Coordinates</h2>
+          </div>
+
+          <label class="form-label">
+            Indian State
+            <select id="stateSelect" class="form-select">
+              <!-- Populated dynamically -->
+            </select>
+          </label>
+
+          <label class="form-label">
+            District
+            <select id="districtSelect" class="form-select">
+              <!-- Populated dynamically -->
+            </select>
+          </label>
+
+          <label class="form-label">
+            Preset Reference Locations
+            <select id="presetSiteSelect" class="form-select">
+              <!-- Populated dynamically -->
+            </select>
+          </label>
+
+          <div class="form-row-2col">
+            <label class="form-label">
+              Latitude (°N)
+              <input id="latInput" type="number" step="0.0001" class="form-input font-mono" value="18.7562">
+            </label>
+            <label class="form-label">
+              Longitude (°E)
+              <input id="lngInput" type="number" step="0.0001" class="form-input font-mono" value="73.8569">
+            </label>
+          </div>
+
+          <!-- Boundary File Upload -->
+          <div class="upload-box">
+            <label for="boundaryFileInput" class="upload-label">
+              <span>📐 Optional: Upload Site Boundary (.geojson / .kml)</span>
+              <input id="boundaryFileInput" type="file" accept=".geojson,.kml,.json" class="file-hidden">
+            </label>
+            <small class="upload-hint">Upload polygon layout to compute exact property boundary & footprint overlap.</small>
+          </div>
+
+          <!-- Action Buttons -->
+          <div class="form-actions">
+            <button id="btnAnalyze" class="btn-primary">Analyze Site Intelligence ➔</button>
+            <button id="btnReset" class="btn-secondary">Reset</button>
+          </div>
+
+          <p class="map-hint-text">💡 <strong>Pro-Tip:</strong> Click anywhere on the map of India to immediately inspect that custom location.</p>
+        </div>
+
+      </aside>
+
+      <!-- Right Column: Interactive GIS Map Card -->
+      <section class="panel map-panel">
+        <div class="map-header">
+          <div>
+            <strong class="map-title">Interactive GIS Spatial Intelligence Map</strong>
+            <span id="systemStatusBar" class="map-status">System ready • Select location or click map</span>
+          </div>
+
+          <!-- Basemap Switcher Controls -->
+          <div class="map-basemap-switch">
+            <button id="btnBaseVoyager" class="basemap-btn active" type="button">🗺️ Vector</button>
+            <button id="btnBaseSatellite" class="basemap-btn" type="button">🛰️ Satellite</button>
+            <button id="btnBaseTopo" class="basemap-btn" type="button">🏔️ Terrain</button>
+          </div>
+
+          <!-- Analytical Buffer Toggles -->
+          <div class="buffer-toggles">
+            <span class="buffer-label">Buffers:</span>
+            <label><input type="checkbox" id="toggle1km" checked> 1 km</label>
+            <label><input type="checkbox" id="toggle5km" checked> 5 km</label>
+            <label><input type="checkbox" id="toggle10km" checked> 10 km</label>
+          </div>
+        </div>
+
+        <div id="map" class="leaflet-map-canvas"></div>
+
+        <!-- Map Legend -->
+        <div class="map-legend-bar">
+          <div class="legend-item"><span class="leg-color leg-river"></span> River / Waterbody (OSM)</div>
+          <div class="legend-item"><span class="leg-color leg-pa"></span> Protected Area & 10 km ESZ</div>
+          <div class="legend-item"><span class="leg-color leg-ind"></span> Notified Industrial Park</div>
+          <div class="legend-item"><span class="leg-color leg-pop"></span> Urban Center / Habitation</div>
+          <div class="legend-item"><span class="leg-color leg-cand"></span> Candidate Alternative</div>
+          <div class="legend-item"><span class="leg-color leg-demo"></span> Demo Aquifer/Agri Zone</div>
+        </div>
+      </section>
+
+    </section>
+
+    <!-- Results Section -->
+    <section class="results-container">
+
+      <!-- Real-time Multi-Stage Geoprocessing Pipeline Status Card -->
+      <div id="pipelineContainer" class="pipeline-card" style="display:none;">
+        <div class="pipeline-header">
+          <div class="pipeline-spinner-radar"></div>
+          <div class="pipeline-text-col">
+            <div class="pipeline-badge">REAL-TIME SPATIAL GEOPROCESSING ACTIVE</div>
+            <h3 id="pipelineStageTitle">Acquiring spatial coordinates & bounding extents...</h3>
+            <p id="pipelineStageDetail">Intersecting target coordinates with Survey of India & OpenStreetMap River networks...</p>
+          </div>
+          <div class="pipeline-percent-col">
+            <span id="pipelinePercent">0%</span>
+          </div>
+        </div>
+        <div class="pipeline-progress-track">
+          <div id="pipelineProgressBar" class="pipeline-progress-fill" style="width: 0%;"></div>
+        </div>
+        <div class="pipeline-steps-row">
+          <div id="pstep-1" class="pstep active"><span>1</span> Hydrology & Rivers</div>
+          <div id="pstep-2" class="pstep"><span>2</span> 10km Wildlife ESZ</div>
+          <div id="pstep-3" class="pstep"><span>3</span> Census Habitations</div>
+          <div id="pstep-4" class="pstep"><span>4</span> MCE Risk Model</div>
+          <div id="pstep-5" class="pstep"><span>5</span> Impact & Regulations</div>
+        </div>
+      </div>
+
+      <!-- Preliminary Risk Score Card -->
+      <div class="score-banner-panel panel">
+        <div class="score-ring-wrapper">
+          <div class="score-circle">
+            <span id="scoreValue">—</span>
+            <small>/100</small>
+          </div>
+        </div>
+
+        <div class="score-content">
+          <div class="score-eyebrow">ECOCLEAR PRELIMINARY RISK SCORE</div>
+          <div class="score-header-row">
+            <h2 id="verdictHeadline">Run an Analysis</h2>
+            <span id="riskBadge" class="risk-level-badge">PENDING</span>
+          </div>
+          <p id="verdictDescription">Your project-specific weighted environmental risk score and site sensitivities will appear here.</p>
+          
+          <div class="score-actions-row">
+            <button id="btnExplainScore" class="btn-explain-score">🔍 Why this score? (Explainable Breakdown)</button>
+            <div id="topConcernsSummary" class="top-concerns-bar"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Section 03: Geodesic Spatial Proximity Findings -->
+      <section class="panel findings-section">
+        <div class="section-heading">
+          <span class="step-num">03</span>
+          <div>
+            <h2>Geodesic Spatial Proximity Findings</h2>
+            <p>Precise great-circle distances computed from the site to mapped Indian environmental receptors.</p>
+          </div>
+        </div>
+
+        <div id="gisFindingsList" class="gis-findings-list">
+          <div class="empty-state">No analysis executed yet. Click "Analyze Site Intelligence".</div>
+        </div>
+      </section>
+
+      <!-- Section 04: 12-Factor Environmental Impact Profile -->
+      <section id="impacts" class="panel findings-section">
+        <div class="section-heading">
+          <span class="step-num">04</span>
+          <div>
+            <h2>12-Factor Environmental Impact & Mitigation Profile</h2>
+            <p>Rigorous, science-grounded potential causes, environmental harms, community exposure pathways, and mitigations.</p>
+          </div>
+        </div>
+
+        <div id="impactCardsGrid" class="impact-cards-grid">
+          <div class="empty-state">Run analysis to view the 12-factor environmental impact profile.</div>
+        </div>
+      </section>
+
+      <!-- Section 05: Regulatory Pre-Screening Checks -->
+      <section id="regulatory" class="panel findings-section">
+        <div class="section-heading">
+          <span class="step-num">05</span>
+          <div>
+            <h2>Potential Regulatory Considerations & Clearances</h2>
+            <p>Statutory mappings against MoEFCC EIA Notification 2006, CPCB Categorization, Forest Conservation Act, and AERB codes.</p>
+          </div>
+        </div>
+
+        <div id="regulatoryChecksList" class="regulatory-list">
+          <div class="empty-state">Run analysis to evaluate regulatory clearance pathways.</div>
+        </div>
+      </section>
+
+      <!-- Section 06: Alternative Site Finder -->
+      <section id="alternatives" class="panel findings-section">
+        <div class="section-heading">
+          <span class="step-num">06</span>
+          <div>
+            <h2>Alternative Site Finder & Multi-Criteria Ranking</h2>
+            <p>Candidate industrial parcels in the region evaluated against the <strong>exact same industry profile</strong> to identify lower-conflict land.</p>
+          </div>
+        </div>
+
+        <div id="alternativeSitesGrid" class="alternatives-grid">
+          <div class="empty-state">Run analysis to discover and rank alternative candidate sites.</div>
+        </div>
+      </section>
+
+      <!-- Section 07: Same-Site Multi-Industry Comparison Matrix -->
+      <section id="compare" class="panel findings-section">
+        <div class="section-heading">
+          <span class="step-num">07</span>
+          <div>
+            <h2>Multi-Industry Comparison at this Exact Location</h2>
+            <p>Proves the core differentiator: the exact same land produces fundamentally different risk profiles depending on the industrial sector.</p>
+          </div>
+        </div>
+
+        <div class="comparison-table-wrapper">
+          <table class="comparison-table">
+            <thead>
+              <tr>
+                <th>Industry Sector</th>
+                <th>Air</th>
+                <th>Water</th>
+                <th>Population</th>
+                <th>Biodiversity</th>
+                <th>Waste</th>
+                <th>Agriculture</th>
+                <th>Overall Risk</th>
+                <th>Primary Siting Consideration</th>
+              </tr>
+            </thead>
+            <tbody id="comparisonTableBody">
+              <tr><td colspan="9" class="empty-state">Run analysis to compare project types.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- Bottom Floating / Sticky Export Bar -->
+      <div class="export-actions-bar">
+        <button id="btnExportJson" class="btn-secondary">⇩ Export Data Package (JSON)</button>
+        <button id="btnOpenReportBottom" class="btn-primary" onclick="document.getElementById('btnOpenReport').click()">📄 View & Print Executive Environmental Screening Report</button>
+      </div>
+
+    </section>
+  </main>
+
+  <!-- Modals Container -->
+
+  <!-- Modal 1: Explainable Risk "Why X/100?" Modal -->
+  <div id="explainScoreModal" class="modal-backdrop">
+    <div class="modal-card modal-lg">
+      <div class="modal-header">
+        <h3>🔍 Explainable Risk Scoring Model ("Why this score?")</h3>
+        <button class="modal-close-btn">&times;</button>
+      </div>
+      <div id="explainScoreModalContent" class="modal-body"></div>
+    </div>
+  </div>
+
+  <!-- Modal 2: Environmental Impact Deep Dive Modal -->
+  <div id="impactDeepDiveModal" class="modal-backdrop">
+    <div class="modal-card modal-lg">
+      <div class="modal-header">
+        <h3>🌱 Environmental Factor Deep Dive</h3>
+        <button class="modal-close-btn">&times;</button>
+      </div>
+      <div id="impactDeepDiveContent" class="modal-body"></div>
+    </div>
+  </div>
+
+  <!-- Modal 3: Executive Report Modal -->
+  <div id="reportModal" class="modal-backdrop">
+    <div class="modal-card modal-xl">
+      <div class="modal-header">
+        <h3>📄 Executive Environmental Site Pre-Screening Report</h3>
+        <div class="modal-header-actions">
+          <button id="btnModalPrint" class="btn-primary">🖨️ Print / Save as PDF</button>
+          <button class="modal-close-btn">&times;</button>
+        </div>
+      </div>
+      <div id="reportModalContent" class="modal-body report-preview-body"></div>
+    </div>
+  </div>
+
+  <!-- Modal 4: Data Sources & Transparency Modal -->
+  <div id="dataSourcesModal" class="modal-backdrop">
+    <div class="modal-card modal-lg">
+      <div class="modal-header">
+        <h3>📊 Data Sources & Provenance Registry</h3>
+        <button class="modal-close-btn">&times;</button>
+      </div>
+      <div id="dataSourcesContent" class="modal-body"></div>
+    </div>
+  </div>
+
+  <!-- Modal 5: Methodology Modal -->
+  <div id="methodologyModal" class="modal-backdrop">
+    <div class="modal-card modal-lg">
+      <div class="modal-header">
+        <h3>📐 Scientific Methodology & Processing Flowchart</h3>
+        <button class="modal-close-btn">&times;</button>
+      </div>
+      <div id="methodologyContent" class="modal-body"></div>
+    </div>
+  </div>
+
+  <!-- Modal 6: Academic Project Defense Docs Modal -->
+  <div id="academicDocsModal" class="modal-backdrop">
+    <div class="modal-card modal-lg">
+      <div class="modal-header">
+        <h3>🎓 Academic Project Defense Documentation</h3>
+        <button class="modal-close-btn">&times;</button>
+      </div>
+      <div id="academicDocsContent" class="modal-body"></div>
+    </div>
+  </div>
+
+  <!-- Modal 7: Ask EcoClear AI Environmental Advisor Modal -->
+  <div id="aiAdvisorModal" class="modal-backdrop">
+    <div class="modal-card modal-lg ai-drawer-card">
+      <div class="modal-header">
+        <div style="display:flex; align-items:center; gap:8px;">
+          <span style="font-size:22px;">✨</span>
+          <div>
+            <h3 style="margin:0;">EcoClear AI — Environmental Siting Advisor</h3>
+            <small style="color:var(--slate-500); font-size:11px;">Grounded in MoEFCC Regulations, CPCB Standards & Site Spatial Analysis</small>
+          </div>
+        </div>
+        <div style="display:flex; align-items:center; gap:8px;">
+          <button id="btnToggleApiKey" class="text-btn" style="font-size:11px;">⚙️ Configure Gemini Key</button>
+          <button class="modal-close-btn">&times;</button>
+        </div>
+      </div>
+
+      <div class="modal-body" style="display:flex; flex-direction:column; flex:1; overflow:hidden; padding:16px;">
+        <!-- Context Banner -->
+        <div class="ai-grounded-context-pill">
+          <span id="aiContextPillText">Grounded Context: Loading site profile...</span>
+          <span class="report-badge-small" style="background:#dcfce7; color:#166534; font-weight:700;">DUAL ENGINE: GEMINI / GROUNDED LOCAL</span>
+        </div>
+
+        <!-- Optional Key Config Box (collapsible) -->
+        <div id="aiKeyConfigBox" class="ai-key-config-box" style="display:none;">
+          <strong>Google Gemini API Key (Optional):</strong>
+          <p style="margin:4px 0 8px; color:var(--slate-600);">If you have a Gemini API key, paste it below to enable live cloud LLM reasoning. Otherwise, leave it empty to use EcoClear's built-in local grounded reasoning engine (runs with zero key!).</p>
+          <div style="display:flex; gap:8px;">
+            <input id="geminiApiKeyInput" type="password" class="form-input" placeholder="AIzaSy... (leave blank for local engine)" style="flex:1;">
+            <button id="btnSaveApiKey" class="btn-primary" style="padding:6px 14px; font-size:12px;">Save</button>
+          </div>
+        </div>
+
+        <!-- Chat Messages History -->
+        <div id="aiChatMessages" class="ai-chat-messages">
+          <div class="ai-msg ai-msg-assistant">
+            <strong>👋 Welcome to EcoClear AI Advisor!</strong>
+            <p style="margin-top:4px;">I can analyze your project's environmental vulnerabilities, interpret statutory clearance requirements, suggest engineering mitigations (ZLD, ESPs, scrubbers), or draft an EIA Terms of Reference (ToR) outline. Select a question below or ask me anything!</p>
+          </div>
+        </div>
+
+        <!-- Quick Prompts Bar -->
+        <div class="ai-prompts-bar">
+          <button class="prompt-chip" data-query="Summarize the top environmental risks and spatial constraints for this site">📋 Summarize Top Risks</button>
+          <button class="prompt-chip" data-query="What are the statutory clearance bottlenecks (EIA, Wildlife, SPCB) for this project?">⚖️ Statutory Clearance Checklist</button>
+          <button class="prompt-chip" data-query="What are the water consumption and Zero Liquid Discharge (ZLD) requirements?">💧 Water & ZLD Strategy</button>
+          <button class="prompt-chip" data-query="Draft an indicative Terms of Reference (ToR) outline for the EIA study">📑 Draft EIA ToR Outline</button>
+          <button class="prompt-chip" data-query="How does this project compare to siting a utility-scale Solar Plant here?">☀️ Compare to Solar Project</button>
+        </div>
+
+        <!-- Chat Input Form -->
+        <form id="aiChatForm" class="ai-input-form">
+          <input id="aiChatInput" type="text" class="ai-input-field" placeholder="Ask a question about this site, regulations, or mitigations..." autocomplete="off">
+          <button type="submit" class="btn-primary" style="padding:10px 18px;">Send ➔</button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- Footer -->
+  <footer class="main-footer">
+    <div class="footer-inner">
+      <div>
+        <strong>EcoClear India</strong> — Industrial Site Environmental Pre-Screening & Impact Intelligence
+      </div>
+      <div class="footer-sub">
+        Academic College Project Demonstration • Built for engineering review and production planning • Stage 3 Architecture
+      </div>
+    </div>
+  </footer>
+
+  <!-- Scripts -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+  <script type="module" src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,29 @@
+{
+  "purpose": "Starter schema for replacing demo logic with real Indian GIS and regulatory data.",
+  "project": {
+    "industry_code": "steel",
+    "capacity": 500,
+    "unit": "tonnes/day",
+    "geometry": "Point or Polygon"
+  },
+  "layers": [
+    {"code":"waterbody","source":"authoritative Indian GIS source","geometry":"Polygon/Line"},
+    {"code":"landuse","source":"authoritative Indian GIS source","geometry":"Polygon"},
+    {"code":"forest","source":"authoritative Indian GIS source","geometry":"Polygon"},
+    {"code":"protected_area","source":"authoritative Indian GIS source","geometry":"Polygon"},
+    {"code":"settlement","source":"official census/GIS source","geometry":"Point/Polygon"},
+    {"code":"roads","source":"official/open licensed GIS source","geometry":"Line"},
+    {"code":"schools","source":"official/open licensed GIS source","geometry":"Point"},
+    {"code":"hospitals","source":"official/open licensed GIS source","geometry":"Point"}
+  ],
+  "analysis": {
+    "operations": ["distance", "buffer", "intersection", "nearest_feature", "area_overlap"],
+    "outputs": ["feature_distances", "sensitivity_flags", "industry_score", "approval_checks"]
+  },
+  "rule_profile": {
+    "industry_code": "steel",
+    "version": "demo-1.0",
+    "effective_date": null,
+    "weights_are_official": false
+  }
+}
