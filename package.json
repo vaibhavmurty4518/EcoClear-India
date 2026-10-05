@@ -1,0 +1,19 @@
+{
+  "name": "ecoclear-india",
+  "version": "1.0.0",
+  "description": "Industrial Environmental Site Pre-Screening & Impact Intelligence Platform for India",
+  "main": "index.html",
+  "scripts": {
+    "start": "npx serve .",
+    "dev": "npx serve ."
+  },
+  "keywords": [
+    "gis",
+    "environmental-impact",
+    "eia-2006",
+    "india",
+    "site-screening"
+  ],
+  "author": "EcoClear India Team",
+  "license": "MIT"
+}

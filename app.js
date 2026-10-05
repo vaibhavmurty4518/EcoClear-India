@@ -45,17 +45,30 @@ let polygonLayer = null;
 let riverLayerGroup = null;
 let paLayerGroup = null;
 let industrialLayerGroup = null;
-let settlementLayerGroup = null;
+let settlementGroupTier1 = null;
+let settlementGroupTier2 = null;
+let settlementGroupTier3 = null;
 let demoZonesLayerGroup = null;
 let candidatesLayerGroup = null;
 
 // Basemap references
 let activeBaseLayer = null;
-let voyagerLayer = null;
+let vectorLayer = null;
 let satelliteLayer = null;
 let topoLayer = null;
 
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
+
+/**
+ * Debounce utility to prevent high-frequency layout churn
+ */
+function debounce(func, wait) {
+  let timeout;
+  return function (...args) {
+    clearTimeout(timeout);
+    timeout = setTimeout(() => func.apply(this, args), wait);
+  };
+}
 
 /**
  * Application Entry Point
@@ -105,54 +118,106 @@ function initUIComponents() {
 }
 
 /**
- * Initializes Leaflet Map with layers and basemap switcher
+ * Initializes Leaflet Map with layers, custom panes, and reliable basemap switcher
  */
 function initLeafletMap() {
+  const initialLat = state.location.lat;
+  const initialLng = state.location.lng;
+
+  // Bounding box constraint to Indian subcontinent extents
+  const southWest = L.latLng(4.0, 65.0);
+  const northEast = L.latLng(38.5, 100.0);
+  const indiaBounds = L.latLngBounds(southWest, northEast);
+
   map = L.map("map", {
-    center: [state.location.lat, state.location.lng],
-    zoom: 8,
+    center: [initialLat, initialLng],
+    zoom: 10,
+    minZoom: 5,
+    maxZoom: 18,
+    maxBounds: indiaBounds.pad(0.25),
+    maxBoundsViscosity: 0.75,
     zoomControl: true,
-    scrollWheelZoom: true
+    scrollWheelZoom: true,
+    doubleClickZoom: true,
+    dragging: true,
+    touchZoom: true,
+    boxZoom: true,
+    keyboard: true
   });
 
-  // 1. Vector Map (CartoDB Voyager)
-  voyagerLayer = L.tileLayer("https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png", {
-    maxZoom: 19,
-    attribution: "© OpenStreetMap contributors, © CARTO"
-  }).addTo(map);
-  activeBaseLayer = voyagerLayer;
+  // Strict Custom Pane Z-Index Hierarchy (guarantees layers stack in correct order)
+  map.createPane("riversPane");
+  map.getPane("riversPane").style.zIndex = 350;
+
+  map.createPane("demoZonesPane");
+  map.getPane("demoZonesPane").style.zIndex = 370;
+
+  map.createPane("protectedAreasPane");
+  map.getPane("protectedAreasPane").style.zIndex = 390;
+
+  map.createPane("industrialPane");
+  map.getPane("industrialPane").style.zIndex = 420;
+
+  map.createPane("settlementsPane");
+  map.getPane("settlementsPane").style.zIndex = 450;
+
+  map.createPane("candidateSitesPane");
+  map.getPane("candidateSitesPane").style.zIndex = 480;
+
+  map.createPane("buffersPane");
+  map.getPane("buffersPane").style.zIndex = 510;
+
+  map.createPane("siteMarkerPane");
+  map.getPane("siteMarkerPane").style.zIndex = 650;
+
+  // 1. Vector Map: Standard OpenStreetMap (no API key required, zero watermarking)
+  vectorLayer = L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    maxZoom: 18,
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+  });
 
   // 2. High-Resolution Satellite Map (Esri World Imagery)
   satelliteLayer = L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", {
-    maxZoom: 19,
+    maxZoom: 18,
     attribution: "Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community"
   });
 
   // 3. Topographic Elevation Terrain (OpenTopoMap)
   topoLayer = L.tileLayer("https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png", {
     maxZoom: 17,
-    attribution: "Map data: &copy; OpenStreetMap contributors, SRTM | Map style: &copy; OpenTopoMap (CC-BY-SA)"
+    attribution: 'Map data: &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors, SRTM | Map style: &copy; <a href="https://opentopomap.org">OpenTopoMap</a> (<a href="https://creativecommons.org/licenses/by-sa/3.0/">CC-BY-SA</a>)'
   });
 
+  // Set default basemap
+  vectorLayer.addTo(map);
+  activeBaseLayer = vectorLayer;
+
   // Basemap Switcher Events
-  document.getElementById("btnBaseVoyager")?.addEventListener("click", () => switchBasemap("voyager"));
+  document.getElementById("btnBaseVector")?.addEventListener("click", () => switchBasemap("vector"));
   document.getElementById("btnBaseSatellite")?.addEventListener("click", () => switchBasemap("satellite"));
   document.getElementById("btnBaseTopo")?.addEventListener("click", () => switchBasemap("topo"));
 
-  // Layer Groups
-  riverLayerGroup = L.layerGroup().addTo(map);
-  paLayerGroup = L.layerGroup().addTo(map);
-  industrialLayerGroup = L.layerGroup().addTo(map);
-  settlementLayerGroup = L.layerGroup().addTo(map);
-  demoZonesLayerGroup = L.layerGroup().addTo(map);
-  candidatesLayerGroup = L.layerGroup().addTo(map);
+  // Layer Groups connected to custom panes
+  riverLayerGroup = L.layerGroup({ pane: "riversPane" }).addTo(map);
+  paLayerGroup = L.layerGroup({ pane: "protectedAreasPane" }).addTo(map);
+  industrialLayerGroup = L.layerGroup({ pane: "industrialPane" }).addTo(map);
+  demoZonesLayerGroup = L.layerGroup({ pane: "demoZonesPane" }).addTo(map);
+  candidatesLayerGroup = L.layerGroup({ pane: "candidateSitesPane" }).addTo(map);
+
+  settlementGroupTier1 = L.layerGroup({ pane: "settlementsPane" });
+  settlementGroupTier2 = L.layerGroup({ pane: "settlementsPane" });
+  settlementGroupTier3 = L.layerGroup({ pane: "settlementsPane" });
 
   drawStaticGisLayers();
   renderSiteMarkerAndBuffers();
+  updateSettlementLOD();
 
-  // Click on map selects custom site
+  // Dynamic Level of Detail (LOD) for settlements as user zooms
+  map.on("zoomend", updateSettlementLOD);
+
+  // Click on map selects custom site without resetting zoom or view
   map.on("click", (e) => {
-    state.location = {
+    const customLoc = {
       name: `Custom Site (${e.latlng.lat.toFixed(4)}°N, ${e.latlng.lng.toFixed(4)}°E)`,
       lat: e.latlng.lat,
       lng: e.latlng.lng,
@@ -160,22 +225,29 @@ function initLeafletMap() {
       district: state.selectedDistrict,
       setting: "Custom Geographic Coordinates"
     };
-    state.boundaryGeometry = null;
-    if (polygonLayer) {
-      map.removeLayer(polygonLayer);
-      polygonLayer = null;
-    }
-    document.getElementById("presetSiteSelect").value = "custom";
-    updateCoordinateInputs();
-    runFullAnalysis();
+    const presetSelect = document.getElementById("presetSiteSelect");
+    if (presetSelect) presetSelect.value = "custom";
+    updateSiteLocation(customLoc, { flyTo: false, panTo: false, triggerAnalysis: true });
   });
+
+  // Debounced Window Resize Handler for stable canvas rendering
+  window.addEventListener("resize", debounce(() => {
+    if (map) map.invalidateSize();
+  }, 150));
+
+  // Initial layout stabilization
+  setTimeout(() => { if (map) map.invalidateSize(); }, 200);
+  setTimeout(() => { if (map) map.invalidateSize(); }, 600);
 }
 
 /**
- * Switches the active Leaflet basemap
+ * Switches the active Leaflet basemap without resetting viewport or layers
  */
 function switchBasemap(type) {
-  if (activeBaseLayer) map.removeLayer(activeBaseLayer);
+  if (!map) return;
+  if (activeBaseLayer && map.hasLayer(activeBaseLayer)) {
+    map.removeLayer(activeBaseLayer);
+  }
   document.querySelectorAll(".basemap-btn").forEach(b => b.classList.remove("active"));
 
   if (type === "satellite") {
@@ -187,51 +259,54 @@ function switchBasemap(type) {
     activeBaseLayer = topoLayer;
     document.getElementById("btnBaseTopo")?.classList.add("active");
   } else {
-    voyagerLayer.addTo(map);
-    activeBaseLayer = voyagerLayer;
-    document.getElementById("btnBaseVoyager")?.classList.add("active");
+    vectorLayer.addTo(map);
+    activeBaseLayer = vectorLayer;
+    document.getElementById("btnBaseVector")?.classList.add("active");
   }
+  activeBaseLayer.bringToBack();
 }
 
 /**
  * Draws real and illustrative Indian GIS layers onto map
  */
 function drawStaticGisLayers() {
-  // 1. Major Rivers (Blue Polylines)
+  // 1. Major Rivers & Regional Tributaries (Clean Blue Polylines)
   MAJOR_RIVERS.forEach(r => {
     const polyline = L.polyline(r.coordinates, {
+      pane: "riversPane",
       color: "#0284c7",
-      weight: 3.5,
+      weight: 3.0,
       opacity: 0.75,
       dashArray: null
     }).addTo(riverLayerGroup);
 
-    polyline.bindTooltip(`<b>${r.name}</b><br><small>${r.type}</small><br><span class="map-badge-real">VERIFIED RIVER NETWORK</span>`, {
+    polyline.bindTooltip(`<b>${r.name}</b><br><small>${r.type}</small><br><span class="map-badge-real">VERIFIED HYDROLOGY</span>`, {
       sticky: true
     });
   });
 
-  // 2. Protected Areas & Wildlife Sanctuaries (Green Circles with 10km ESZ Rings)
+  // 2. Protected Areas & Wildlife Sanctuaries (10km ESZ Rings + Shield Badge Pin)
   PROTECTED_AREAS.forEach(pa => {
-    // 10km ESZ Ring
+    // 10km Statutory Eco-Sensitive Zone (ESZ)
     L.circle([pa.lat, pa.lng], {
-      radius: pa.eszKm * 1000,
+      pane: "protectedAreasPane",
+      radius: (pa.eszKm || 10) * 1000,
       color: "#16a34a",
       fillColor: "#22c55e",
-      fillOpacity: 0.08,
+      fillOpacity: 0.06,
       weight: 1.5,
       dashArray: "4, 4"
     }).addTo(paLayerGroup).bindTooltip(`<b>${pa.name} — 10 km Statutory Eco-Sensitive Zone (ESZ)</b><br><small>${pa.fauna}</small>`, { sticky: true });
 
-    // Core Protected Area Marker
+    // Distinctive circular shield icon
     const paIcon = L.divIcon({
-      className: "pa-marker-icon",
-      html: `<div class="pa-marker-pin" title="${pa.name}">🐅</div>`,
+      className: "pa-marker-icon-wrap",
+      html: `<div class="pa-marker-badge" title="${pa.name}"><span>🐅</span></div>`,
       iconSize: [24, 24],
       iconAnchor: [12, 12]
     });
 
-    L.marker([pa.lat, pa.lng], { icon: paIcon }).addTo(paLayerGroup)
+    L.marker([pa.lat, pa.lng], { icon: paIcon, pane: "protectedAreasPane" }).addTo(paLayerGroup)
       .bindPopup(`
         <div class="map-popup-card">
           <div class="pop-header pa-head">🐅 ${pa.name}</div>
@@ -244,16 +319,16 @@ function drawStaticGisLayers() {
       `);
   });
 
-  // 3. Notified Industrial Parks (Purple Hex Icons)
+  // 3. Notified Industrial Corridors & SEZs (Purple Badge Pin)
   INDUSTRIAL_CORRIDORS.forEach(ind => {
     const indIcon = L.divIcon({
-      className: "ind-marker-icon",
-      html: `<div class="ind-marker-pin">🏭</div>`,
-      iconSize: [22, 22],
-      iconAnchor: [11, 11]
+      className: "ind-marker-icon-wrap",
+      html: `<div class="ind-marker-badge" title="${ind.name}"><span>🏭</span></div>`,
+      iconSize: [24, 24],
+      iconAnchor: [12, 12]
     });
 
-    L.marker([ind.lat, ind.lng], { icon: indIcon }).addTo(industrialLayerGroup)
+    L.marker([ind.lat, ind.lng], { icon: indIcon, pane: "industrialPane" }).addTo(industrialLayerGroup)
       .bindPopup(`
         <div class="map-popup-card">
           <div class="pop-header ind-head">🏭 ${ind.name}</div>
@@ -264,112 +339,217 @@ function drawStaticGisLayers() {
       `);
   });
 
-  // 4. Urban Settlements (Amber/Red Dots)
+  // 4. Urban Settlements Hierarchical Multi-Tier LOD
   URBAN_SETTLEMENTS.forEach(u => {
-    L.circleMarker([u.lat, u.lng], {
-      radius: u.populationTier.includes("Mega") ? 8 : 6,
-      color: "#e11d48",
-      fillColor: "#f43f5e",
-      fillOpacity: 0.6,
-      weight: 1.5
-    }).addTo(settlementLayerGroup)
-      .bindTooltip(`<b>${u.name}</b><br>Pop Tier: ${u.populationTier}<br>Est. Population: ~${(u.approxPop / 100000).toFixed(1)} Lakhs`, { sticky: true });
+    const pop = u.approxPop || 500000;
+    const isTier1 = pop >= 5000000;
+    const isTier2 = pop >= 1000000 && pop < 5000000;
+
+    const radius = isTier1 ? 4.5 : (isTier2 ? 3.5 : 2.8);
+    const color = "#ffffff";
+    const fillColor = isTier1 ? "#e11d48" : (isTier2 ? "#f43f5e" : "#fb7185");
+    const fillOpacity = isTier1 ? 0.85 : (isTier2 ? 0.75 : 0.65);
+    const weight = isTier1 ? 1.5 : (isTier2 ? 1.0 : 0.8);
+
+    const targetGroup = isTier1 ? settlementGroupTier1 : (isTier2 ? settlementGroupTier2 : settlementGroupTier3);
+
+    const marker = L.circleMarker([u.lat, u.lng], {
+      pane: "settlementsPane",
+      radius,
+      color,
+      fillColor,
+      fillOpacity,
+      weight
+    }).addTo(targetGroup);
+
+    marker.bindTooltip(`<b>${u.name}</b><br><small>${u.populationTier || "Urban Settlement"}</small><br>Est. Population: ~${(pop / 100000).toFixed(1)} Lakhs`, {
+      sticky: true
+    });
   });
 
   // 5. Illustrative Demo Zones (Clear Demonstration Badging)
   DEMO_ILLUSTRATIVE_ZONES.forEach(z => {
     L.circle([z.lat, z.lng], {
+      pane: "demoZonesPane",
       radius: z.radiusKm * 1000,
       color: z.color,
       fillColor: z.color,
-      fillOpacity: 0.12,
-      weight: 1
+      fillOpacity: 0.09,
+      weight: 1.5,
+      dashArray: "6, 6"
     }).addTo(demoZonesLayerGroup)
       .bindTooltip(`<b>${z.name}</b><br><span class="map-badge-demo">ILLUSTRATIVE DEMO LAYER</span><br><small>${z.source}</small>`, { sticky: true });
   });
 }
 
 /**
- * Updates or creates site marker and concentric analytical buffer zones
+ * Updates settlement visibility dynamically based on map zoom level to eliminate marker clutter
+ */
+function updateSettlementLOD() {
+  if (!map) return;
+  const z = map.getZoom();
+
+  // Tier 1 (Mega Metros) always visible
+  if (!map.hasLayer(settlementGroupTier1)) settlementGroupTier1.addTo(map);
+
+  // Tier 2 (Major Cities) visible at regional scale (z >= 7)
+  if (z >= 7) {
+    if (!map.hasLayer(settlementGroupTier2)) settlementGroupTier2.addTo(map);
+  } else {
+    if (map.hasLayer(settlementGroupTier2)) map.removeLayer(settlementGroupTier2);
+  }
+
+  // Tier 3 (District Towns / Local Hubs) visible at local scale (z >= 10)
+  if (z >= 10) {
+    if (!map.hasLayer(settlementGroupTier3)) settlementGroupTier3.addTo(map);
+  } else {
+    if (map.hasLayer(settlementGroupTier3)) map.removeLayer(settlementGroupTier3);
+  }
+}
+
+/**
+ * Updates or creates site marker and concentric analytical buffer zones without resetting view/zoom
  */
 function renderSiteMarkerAndBuffers() {
   if (!map) return;
 
   const lat = state.location.lat;
   const lng = state.location.lng;
+  const p = INDUSTRY_PROFILES[state.selectedIndustry] || { name: "Industrial Facility" };
 
-  // Center map on site smoothly
-  map.setView([lat, lng], 10);
-
-  // Remove existing site marker
-  if (siteMarker) map.removeLayer(siteMarker);
-
-  const siteIcon = L.divIcon({
-    className: "active-site-pin-icon",
-    html: `<div class="site-radar-pin"><div class="pulse-ring"></div><div class="inner-core"></div></div>`,
-    iconSize: [32, 32],
-    iconAnchor: [16, 16]
-  });
-
-  siteMarker = L.marker([lat, lng], { icon: siteIcon, zIndexOffset: 1000 }).addTo(map)
-    .bindPopup(`
-      <div class="map-popup-card">
-        <div class="pop-header">📍 Selected Industrial Site</div>
-        <div><strong>Location:</strong> ${state.location.name}</div>
-        <div><strong>Coordinates:</strong> ${lat.toFixed(5)}°N, ${lng.toFixed(5)}°E</div>
-        <div><strong>Industry:</strong> ${INDUSTRY_PROFILES[state.selectedIndustry].name}</div>
-        <div><strong>Capacity:</strong> ${state.capacity.toLocaleString()} ${state.unit}</div>
+  const popupHtml = `
+    <div class="map-popup-card">
+      <div class="pop-header">📍 Selected Industrial Site</div>
+      <div><strong>Location:</strong> ${state.location.name}</div>
+      <div><strong>Coordinates:</strong> ${lat.toFixed(5)}°N, ${lng.toFixed(5)}°E</div>
+      <div><strong>Industry:</strong> ${p.name}</div>
+      <div><strong>Capacity:</strong> ${state.capacity ? state.capacity.toLocaleString() : ""} ${state.unit}</div>
+      <div style="margin-top:6px; font-size:10px; color:#64748b;">
+        Concentric rings: 1 km (Footprint) • 5 km (Environmental) • 10 km (EIA Statutory)
       </div>
-    `);
+    </div>
+  `;
 
-  // Render concentric analytical buffers (1 km, 5 km, 10 km)
-  Object.keys(bufferLayers).forEach(k => {
-    if (bufferLayers[k]) map.removeLayer(bufferLayers[k]);
-  });
+  // 1. Distinctive Selected Site Marker (always on top via siteMarkerPane & high z-index)
+  if (!siteMarker) {
+    const siteIcon = L.divIcon({
+      className: "active-site-pin-wrapper",
+      html: `
+        <div class="selected-site-pin-wrap">
+          <div class="site-radar-pulse"></div>
+          <div class="site-pin-ring">
+            <div class="site-pin-core"></div>
+          </div>
+          <div class="site-pin-label">📍 SELECTED SITE</div>
+        </div>
+      `,
+      iconSize: [36, 36],
+      iconAnchor: [18, 18],
+      popupAnchor: [0, -18]
+    });
 
-  if (state.activeBuffers.km1) {
+    siteMarker = L.marker([lat, lng], {
+      icon: siteIcon,
+      pane: "siteMarkerPane",
+      zIndexOffset: 10000
+    }).addTo(map);
+
+    siteMarker.bindPopup(popupHtml);
+  } else {
+    siteMarker.setLatLng([lat, lng]);
+    siteMarker.setPopupContent(popupHtml);
+  }
+
+  // 2. Concentric Analytical Buffers (1 km, 5 km, 10 km in buffersPane)
+  if (!bufferLayers.km1) {
     bufferLayers.km1 = L.circle([lat, lng], {
+      pane: "buffersPane",
       radius: 1000,
       color: "#ef4444",
       fillColor: "#ef4444",
       fillOpacity: 0.05,
       weight: 1.5,
       dashArray: "3, 3"
-    }).addTo(map).bindTooltip("1.0 km Immediate Footprint Buffer", { sticky: true });
+    }).bindTooltip("<b>1.0 km Immediate Footprint Buffer</b>", { sticky: true });
+    if (state.activeBuffers.km1) bufferLayers.km1.addTo(map);
+  } else {
+    bufferLayers.km1.setLatLng([lat, lng]);
   }
 
-  if (state.activeBuffers.km5) {
+  if (!bufferLayers.km5) {
     bufferLayers.km5 = L.circle([lat, lng], {
+      pane: "buffersPane",
       radius: 5000,
       color: "#f59e0b",
       fillColor: "#f59e0b",
-      fillOpacity: 0.04,
+      fillOpacity: 0.03,
       weight: 1.5,
       dashArray: "4, 4"
-    }).addTo(map).bindTooltip("5.0 km Primary Environmental Buffer", { sticky: true });
+    }).bindTooltip("<b>5.0 km Primary Environmental Buffer</b>", { sticky: true });
+    if (state.activeBuffers.km5) bufferLayers.km5.addTo(map);
+  } else {
+    bufferLayers.km5.setLatLng([lat, lng]);
   }
 
-  if (state.activeBuffers.km10) {
+  if (!bufferLayers.km10) {
     bufferLayers.km10 = L.circle([lat, lng], {
+      pane: "buffersPane",
       radius: 10000,
       color: "#10b981",
       fillColor: "#10b981",
       fillOpacity: 0.02,
       weight: 1.5,
       dashArray: "5, 5"
-    }).addTo(map).bindTooltip("10.0 km EIA Statutory Study Area Buffer", { sticky: true });
+    }).bindTooltip("<b>10.0 km EIA Statutory Study Area Buffer</b>", { sticky: true });
+    if (state.activeBuffers.km10) bufferLayers.km10.addTo(map);
+  } else {
+    bufferLayers.km10.setLatLng([lat, lng]);
   }
 
-  // Render polygon boundary if uploaded
+  // 3. User Uploaded Boundary Polygon
   if (state.boundaryGeometry && state.boundaryGeometry.coordinates) {
     if (polygonLayer) map.removeLayer(polygonLayer);
     polygonLayer = L.polygon(state.boundaryGeometry.coordinates, {
+      pane: "candidateSitesPane",
       color: "#059669",
       fillColor: "#10b981",
       fillOpacity: 0.25,
       weight: 2
     }).addTo(map).bindPopup("<b>Project Site Boundary Polygon</b><br>User uploaded boundary layout.");
-    map.fitBounds(polygonLayer.getBounds(), { padding: [30, 30] });
+  }
+}
+
+/**
+ * Centrally updates project site location and synchronizes viewport cleanly
+ */
+function updateSiteLocation(newLoc, options = { flyTo: true, zoom: 10, triggerAnalysis: true }) {
+  state.location = { ...newLoc };
+  state.boundaryGeometry = null;
+  if (polygonLayer) {
+    map.removeLayer(polygonLayer);
+    polygonLayer = null;
+  }
+
+  updateCoordinateInputs();
+  renderSiteMarkerAndBuffers();
+
+  if (map) {
+    const targetZoom = options.zoom || map.getZoom() || 10;
+    if (options.flyTo) {
+      map.flyTo([state.location.lat, state.location.lng], targetZoom, {
+        animate: true,
+        duration: 0.8
+      });
+    } else if (options.panTo) {
+      map.panTo([state.location.lat, state.location.lng], {
+        animate: true,
+        duration: 0.4
+      });
+    }
+  }
+
+  if (options.triggerAnalysis) {
+    runFullAnalysis();
   }
 }
 
@@ -711,7 +891,7 @@ function renderAlternativeSites() {
       const lat = parseFloat(e.currentTarget.getAttribute("data-lat"));
       const lng = parseFloat(e.currentTarget.getAttribute("data-lng"));
       const name = e.currentTarget.getAttribute("data-name");
-      state.location = {
+      const candLoc = {
         name,
         lat,
         lng,
@@ -719,11 +899,10 @@ function renderAlternativeSites() {
         district: state.selectedDistrict,
         setting: "Candidate Alternative Site"
       };
-      state.boundaryGeometry = null;
-      document.getElementById("presetSiteSelect").value = "custom";
-      updateCoordinateInputs();
-      runFullAnalysis();
-      window.scrollTo({ top: 0, behavior: "smooth" });
+      const presetSelect = document.getElementById("presetSiteSelect");
+      if (presetSelect) presetSelect.value = "custom";
+      updateSiteLocation(candLoc, { flyTo: true, zoom: 11, triggerAnalysis: true });
+      document.getElementById("analysis")?.scrollIntoView({ behavior: "smooth" });
     });
   });
 }
@@ -738,7 +917,8 @@ function renderCandidatePinsOnMap() {
   state.alternativeSites.forEach(c => {
     const color = c.isBest ? "#15803d" : "#0284c7";
     const marker = L.circleMarker([c.lat, c.lng], {
-      radius: c.isBest ? 9 : 7,
+      pane: "candidateSitesPane",
+      radius: c.isBest ? 8 : 6,
       color: "#ffffff",
       fillColor: color,
       fillOpacity: 0.9,
@@ -750,7 +930,7 @@ function renderCandidatePinsOnMap() {
     });
 
     marker.on("click", () => {
-      state.location = {
+      const candLoc = {
         name: c.name,
         lat: c.lat,
         lng: c.lng,
@@ -758,8 +938,9 @@ function renderCandidatePinsOnMap() {
         district: state.selectedDistrict,
         setting: "Alternative Candidate Site"
       };
-      updateCoordinateInputs();
-      runFullAnalysis();
+      const presetSelect = document.getElementById("presetSiteSelect");
+      if (presetSelect) presetSelect.value = "custom";
+      updateSiteLocation(candLoc, { flyTo: true, zoom: 11, triggerAnalysis: true });
     });
   });
 }
@@ -985,7 +1166,7 @@ function setupEventHandlers() {
     // Auto-orient map and analysis to selected state
     const match = URBAN_SETTLEMENTS.find(u => u.state === state.selectedState);
     if (match) {
-      state.location = {
+      const stateLoc = {
         name: `${match.name}, ${state.selectedState}`,
         lat: match.lat,
         lng: match.lng,
@@ -993,15 +1174,9 @@ function setupEventHandlers() {
         district: state.selectedDistrict,
         setting: "Regional Industrial Zone"
       };
-      state.boundaryGeometry = null;
-      if (polygonLayer) {
-        map.removeLayer(polygonLayer);
-        polygonLayer = null;
-      }
       const presetSelect = document.getElementById("presetSiteSelect");
       if (presetSelect) presetSelect.value = "custom";
-      updateCoordinateInputs();
-      runFullAnalysis();
+      updateSiteLocation(stateLoc, { flyTo: true, zoom: 9, triggerAnalysis: true });
     }
   });
 
@@ -1014,7 +1189,7 @@ function setupEventHandlers() {
       (u.name.toLowerCase().includes(distNameClean) || distNameClean.includes(u.name.toLowerCase()))
     );
     if (match) {
-      state.location = {
+      const distLoc = {
         name: `${match.name}, ${state.selectedDistrict}`,
         lat: match.lat,
         lng: match.lng,
@@ -1022,15 +1197,9 @@ function setupEventHandlers() {
         district: state.selectedDistrict,
         setting: "District Industrial Hub"
       };
-      state.boundaryGeometry = null;
-      if (polygonLayer) {
-        map.removeLayer(polygonLayer);
-        polygonLayer = null;
-      }
       const presetSelect = document.getElementById("presetSiteSelect");
       if (presetSelect) presetSelect.value = "custom";
-      updateCoordinateInputs();
-      runFullAnalysis();
+      updateSiteLocation(distLoc, { flyTo: true, zoom: 10, triggerAnalysis: true });
     }
   });
 
@@ -1042,14 +1211,16 @@ function setupEventHandlers() {
       return;
     }
     if (PRESET_SITES[val]) {
-      state.location = { ...PRESET_SITES[val] };
-      state.selectedState = state.location.state;
-      document.getElementById("stateSelect").value = state.selectedState;
+      const preset = PRESET_SITES[val];
+      state.selectedState = preset.state;
+      const stateEl = document.getElementById("stateSelect");
+      if (stateEl) stateEl.value = state.selectedState;
       updateDistrictDropdown();
-      document.getElementById("districtSelect").value = state.location.district;
-      state.boundaryGeometry = null;
-      updateCoordinateInputs();
-      runFullAnalysis();
+      state.selectedDistrict = preset.district;
+      const distEl = document.getElementById("districtSelect");
+      if (distEl) distEl.value = state.selectedDistrict;
+
+      updateSiteLocation({ ...preset }, { flyTo: true, zoom: 10, triggerAnalysis: true });
     }
   });
 
@@ -1071,7 +1242,7 @@ function setupEventHandlers() {
     state.unit = e.target.value;
   });
 
-  // Main Analyze Button
+  // Main Analyze Button (Runs geoprocessing without resetting user viewport)
   document.getElementById("btnAnalyze")?.addEventListener("click", () => {
     runFullAnalysis();
   });
@@ -1084,16 +1255,22 @@ function setupEventHandlers() {
   // Coordinate Manual Input Change
   document.getElementById("latInput")?.addEventListener("change", (e) => {
     const v = parseFloat(e.target.value);
-    if (!isNaN(v)) {
-      state.location.lat = v;
-      runFullAnalysis();
+    if (!isNaN(v) && Math.abs(v - state.location.lat) > 0.0001) {
+      updateSiteLocation({
+        ...state.location,
+        lat: v,
+        name: `Coordinates (${v.toFixed(4)}°N, ${state.location.lng.toFixed(4)}°E)`
+      }, { flyTo: true, zoom: 10, triggerAnalysis: true });
     }
   });
   document.getElementById("lngInput")?.addEventListener("change", (e) => {
     const v = parseFloat(e.target.value);
-    if (!isNaN(v)) {
-      state.location.lng = v;
-      runFullAnalysis();
+    if (!isNaN(v) && Math.abs(v - state.location.lng) > 0.0001) {
+      updateSiteLocation({
+        ...state.location,
+        lng: v,
+        name: `Coordinates (${state.location.lat.toFixed(4)}°N, ${v.toFixed(4)}°E)`
+      }, { flyTo: true, zoom: 10, triggerAnalysis: true });
     }
   });
 
@@ -1111,29 +1288,48 @@ function setupEventHandlers() {
           return;
         }
         state.boundaryGeometry = parsed;
-        state.location.lat = parsed.centroid.lat;
-        state.location.lng = parsed.centroid.lng;
-        state.location.name = `Uploaded Site Boundary (${file.name})`;
-        updateCoordinateInputs();
-        alert(`Successfully imported ${parsed.format} boundary with ${parsed.pointCount} vertices.`);
-        runFullAnalysis();
+        const polyLoc = {
+          ...state.location,
+          lat: parsed.centroid.lat,
+          lng: parsed.centroid.lng,
+          name: `Uploaded Boundary (${file.name})`
+        };
+        updateSiteLocation(polyLoc, { flyTo: false, triggerAnalysis: true });
+        if (polygonLayer) {
+          map.fitBounds(polygonLayer.getBounds(), { padding: [30, 30], maxZoom: 14 });
+        }
       };
       reader.readAsText(file);
     });
   }
 
-  // Buffer Toggles
+  // Buffer Toggles (Show/hide only, zero zoom or view reset)
   document.getElementById("toggle1km")?.addEventListener("change", (e) => {
     state.activeBuffers.km1 = e.target.checked;
-    renderSiteMarkerAndBuffers();
+    if (!bufferLayers.km1) return;
+    if (state.activeBuffers.km1) {
+      if (!map.hasLayer(bufferLayers.km1)) map.addLayer(bufferLayers.km1);
+    } else {
+      if (map.hasLayer(bufferLayers.km1)) map.removeLayer(bufferLayers.km1);
+    }
   });
   document.getElementById("toggle5km")?.addEventListener("change", (e) => {
     state.activeBuffers.km5 = e.target.checked;
-    renderSiteMarkerAndBuffers();
+    if (!bufferLayers.km5) return;
+    if (state.activeBuffers.km5) {
+      if (!map.hasLayer(bufferLayers.km5)) map.addLayer(bufferLayers.km5);
+    } else {
+      if (map.hasLayer(bufferLayers.km5)) map.removeLayer(bufferLayers.km5);
+    }
   });
   document.getElementById("toggle10km")?.addEventListener("change", (e) => {
     state.activeBuffers.km10 = e.target.checked;
-    renderSiteMarkerAndBuffers();
+    if (!bufferLayers.km10) return;
+    if (state.activeBuffers.km10) {
+      if (!map.hasLayer(bufferLayers.km10)) map.addLayer(bufferLayers.km10);
+    } else {
+      if (map.hasLayer(bufferLayers.km10)) map.removeLayer(bufferLayers.km10);
+    }
   });
 
   // "Why 72?" Explainability Modal Button
